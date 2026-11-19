@@ -1,5 +1,5 @@
-import { articles } from "./wissen.mjs";
-import { choose } from "./suche.mjs";
+import { articles } from "./wissen.mjs?v=themen";
+import { choose } from "./suche.mjs?v=themen";
 
 let model;
 async function prepare() {

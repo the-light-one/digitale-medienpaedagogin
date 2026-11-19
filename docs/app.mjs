@@ -1,4 +1,4 @@
-import { choose } from "./suche.mjs";
+import { choose } from "./suche.mjs?v=themen";
 
 const startup = document.querySelector("#startup");
 const startupStatus = document.querySelector("#startup-status");
@@ -31,6 +31,12 @@ function render(articles, fallback = false) {
     link.href = article.url;
     link.textContent = article.publisher + " · " + article.title;
     answer.append(paragraph, link);
+    for (const source of article.more ?? []) {
+      const more = document.createElement("a");
+      more.href = source.url;
+      more.textContent = article.publisher + " · " + source.title;
+      answer.append(document.createElement("br"), more);
+    }
   }
   if (!articles.length) answer.textContent = "Zu deiner Frage habe ich in den hinterlegten Ratgebern keine passende Antwort gefunden.";
   status.textContent = fallback ? "Antwort per lokaler Stichwortsuche." : "";
@@ -72,7 +78,7 @@ function startModel() {
   actions.hidden = true;
   startupStatus.textContent = "Das KI-Modell wird geladen. Beim ersten Besuch kann das etwas dauern.";
   try {
-    worker = new Worker(new URL("./worker.mjs?v=einzug", import.meta.url), { type: "module" });
+    worker = new Worker(new URL("./worker.mjs?v=themen", import.meta.url), { type: "module" });
     worker.onerror = onWorkerError;
     worker.onmessage = ({ data }) => {
       switch (data.type) {
