@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Digitale Medienpädagogin</title>
 <link rel="stylesheet" href="./style.css">
-<script type="module" src="./app.js"></script>
+<script type="module" src="./app.mjs"></script>
 </head>
 <body>
 <main>
@@ -13,11 +13,11 @@
 <p class="category">Hilfe bei Fragen rund ums Netz</p>
 <h1>Digitale Medienpädagogin</h1>
 </header>
-<form id="question-form">
+<form id="question-form" method="dialog">
 <label for="question">Was möchtest du wissen?</label>
 <textarea id="question" name="question" rows="5" minlength="5" maxlength="1600" required
 placeholder="Was kann ich tun, wenn jemand im Klassenchat fertiggemacht wird?"></textarea>
-<p class="hint">Beschreibe die Situation ohne Namen, Nutzernamen oder Kontaktdaten. Deine Frage wird an den KI Dienst übermittelt.</p>
+<p class="hint">Deine Frage bleibt in diesem Browser. Beim ersten Abruf lädt die App das KI Modell. Das kann etwas dauern.</p>
 <button type="submit">Antwort finden</button>
 </form>
 <p id="status" role="status" aria-live="polite"></p>
