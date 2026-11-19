@@ -1,4 +1,4 @@
-import { choose } from "./suche.mjs?v=themen";
+import { choose, followUpAnswer, typedFollowUp } from "./suche.mjs?v=dialog";
 
 const startup = document.querySelector("#startup");
 const startupStatus = document.querySelector("#startup-status");
@@ -11,20 +11,33 @@ const status = document.querySelector("#status");
 const result = document.querySelector("#result");
 const answer = document.querySelector("#answer");
 const button = form.querySelector("button");
+const fieldLabel = form.querySelector("label");
+const defaultLabel = fieldLabel.textContent;
+const defaultMinLength = field.minLength;
 
 let worker;
 let mode = "loading";
 let activeQuestion = "";
 let timer;
+let detailContext = "";
+let activeClarified = false;
+let lastResponse;
 
 function setProgress(value) {
   progress.value = Math.max(progress.value, value);
   percent.textContent = progress.value + " %";
 }
 
-function render(articles, fallback = false) {
+function render(response, fallback = false) {
   clearTimeout(timer);
-  for (const article of articles) {
+  answer.replaceChildren();
+  lastResponse = response;
+  detailContext = response.needsContext ? activeQuestion : "";
+  fieldLabel.textContent = detailContext ? "Was möchtest du ergänzen?" : defaultLabel;
+  field.minLength = response.followUp ? 2 : defaultMinLength;
+  if (detailContext) field.value = "";
+  if (response.article) {
+    const article = response.article;
     const paragraph = document.createElement("p");
     paragraph.textContent = article.text;
     const link = document.createElement("a");
@@ -38,11 +51,49 @@ function render(articles, fallback = false) {
       answer.append(document.createElement("br"), more);
     }
   }
-  if (!articles.length) answer.textContent = "Zu deiner Frage habe ich in den hinterlegten Ratgebern keine passende Antwort gefunden.";
+  if (response.followUp) {
+    const followUp = document.createElement("div");
+    followUp.className = "follow-up";
+    const prompt = document.createElement("p");
+    prompt.textContent = response.followUp.question;
+    followUp.append(prompt);
+    for (const option of response.followUp.options) {
+      const optionButton = document.createElement("button");
+      optionButton.type = "button";
+      optionButton.className = "secondary";
+      optionButton.textContent = option.label;
+      optionButton.addEventListener("click", () => {
+        const next = followUpAnswer(response, option.id);
+        if (next) render(next, fallback);
+      });
+      followUp.append(optionButton);
+    }
+    if (response.needsContext) {
+      const reset = document.createElement("button");
+      reset.type = "button";
+      reset.className = "secondary";
+      reset.textContent = "Neue Frage";
+      reset.addEventListener("click", () => {
+        detailContext = "";
+        lastResponse = undefined;
+        field.value = "";
+        fieldLabel.textContent = defaultLabel;
+        field.minLength = defaultMinLength;
+        result.hidden = true;
+        field.focus();
+      });
+      followUp.append(reset);
+    }
+    answer.append(followUp);
+  } else if (!response.article) {
+    answer.textContent = "Auch mit deiner Ergänzung finde ich in den hinterlegten Ratgebern keine ausreichend passende Antwort.";
+  }
   status.textContent = fallback ? "Antwort per lokaler Stichwortsuche." : "";
   result.hidden = false;
   button.disabled = false;
-  document.querySelector("#answer-title").focus();
+  const heading = document.querySelector("#answer-title");
+  heading.textContent = response.article ? "Antwort" : response.needsContext ? "Eine kurze Rückfrage" : "Kein passender Ratgeber";
+  heading.focus();
 }
 
 function openForm(nextMode) {
@@ -65,7 +116,7 @@ function onWorkerError() {
     actions.hidden = false;
   } else {
     openForm("keywords");
-    if (button.disabled) render(choose(activeQuestion), true);
+    if (button.disabled) render(choose(activeQuestion, [], { clarified: activeClarified }), true);
   }
 }
 
@@ -78,7 +129,7 @@ function startModel() {
   actions.hidden = true;
   startupStatus.textContent = "Das KI-Modell wird geladen. Beim ersten Besuch kann das etwas dauern.";
   try {
-    worker = new Worker(new URL("./worker.mjs?v=themen", import.meta.url), { type: "module" });
+    worker = new Worker(new URL("./worker.mjs?v=dialog", import.meta.url), { type: "module" });
     worker.onerror = onWorkerError;
     worker.onmessage = ({ data }) => {
       switch (data.type) {
@@ -88,7 +139,7 @@ function startModel() {
           startupStatus.textContent = "Die KI bereitet die Ratgeber für deine Fragen vor …";
           break;
         case "ready": openForm("model"); break;
-        case "answer": render(data.articles); break;
+        case "answer": render(data.response); break;
         case "startup-error":
         case "answer-error": onWorkerError(); break;
       }
@@ -109,21 +160,29 @@ document.querySelector("#skip").addEventListener("click", () => {
 form.addEventListener("submit", event => {
   event.preventDefault();
   if (form.hidden || button.disabled) return;
-  activeQuestion = field.value.trim();
-  if (activeQuestion.length < 5) {
-    status.textContent = "Bitte gib eine Frage mit mindestens fünf Zeichen ein.";
+  const input = field.value.trim();
+  const reply = typedFollowUp(lastResponse, input);
+  if (reply) {
+    render(reply, mode === "keywords");
     return;
   }
+  const minimum = detailContext ? 2 : defaultMinLength;
+  if (input.length < minimum) {
+    status.textContent = detailContext ? "Bitte ergänze noch etwas." : "Bitte gib eine Frage mit mindestens fünf Zeichen ein.";
+    return;
+  }
+  activeClarified = Boolean(detailContext);
+  activeQuestion = activeClarified ? detailContext + "\nErgänzung: " + input : input;
   button.disabled = true;
   result.hidden = true;
   answer.replaceChildren();
   if (mode === "keywords") {
-    render(choose(activeQuestion), true);
+    render(choose(activeQuestion, [], { clarified: activeClarified }), true);
     return;
   }
   status.textContent = "Die KI sucht nach passenden Ratgebertexten …";
   timer = setTimeout(onWorkerError, 30000);
-  worker.postMessage({ type: "question", question: activeQuestion });
+  worker.postMessage({ type: "question", question: activeQuestion, clarified: activeClarified });
 });
 
 startModel();

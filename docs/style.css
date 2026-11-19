@@ -29,3 +29,8 @@ progress { display: block; width: 100%; height: .9rem; accent-color: #125543; }
 #startup-actions button { margin: 0 .35rem .35rem 0; }
 button.secondary { background: white; color: #125543; box-shadow: inset 0 0 0 1px #659283; }
 [hidden] { display: none !important; }
+
+.follow-up { border-top: 1px solid #c0d7ca; margin-top: 1.25rem; padding-top: .7rem; }
+.follow-up p { font-weight: 650; margin: 0 0 .6rem; }
+.follow-up button { margin: 0 .4rem .45rem 0; }
+#answer > p:not(:first-child) { margin-top: 1.25rem; }

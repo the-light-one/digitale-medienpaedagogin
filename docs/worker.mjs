@@ -1,5 +1,5 @@
-import { articles } from "./wissen.mjs?v=themen";
-import { choose } from "./suche.mjs?v=themen";
+import { articles } from "./wissen.mjs?v=dialog";
+import { choose } from "./suche.mjs?v=dialog";
 
 let model;
 async function prepare() {
@@ -19,12 +19,22 @@ async function prepare() {
   self.postMessage({ type: "indexing", value: 90 });
   const corpus = [];
   for (const article of articles) {
-    const embedding = await embed("passage: " + article.title + ". " + article.query + " " + article.text,
+    const embedding = article.contextOnly ? null : await embed("passage: " + article.title + ". " + article.query + " " + article.text,
       { pooling: "mean", normalize: true });
-    corpus.push(embedding.data);
+    corpus.push(embedding?.data ?? null);
     self.postMessage({ type: "indexing", value: 90 + Math.floor(9 * corpus.length / articles.length) });
   }
-  return { embed, corpus };
+  const outOfScope = [];
+  for (const example of [
+    "Wie kann ich einen Kuchen backen oder ein Rezept zubereiten?",
+    "Wann fährt der Bus und wie komme ich zur Schule oder zum Bahnhof?",
+    "Ich habe eine Frage zur Schulanmeldung, zum Unterricht oder zu Hausaufgaben.",
+    "Was hilft bei Sport, Haustieren und anderen Fragen zum Alltag?"
+  ]) {
+    const vector = await embed("passage: " + example, { pooling: "mean", normalize: true });
+    outOfScope.push(vector.data);
+  }
+  return { embed, corpus, outOfScope };
 }
 
 self.onmessage = async ({ data }) => {
@@ -39,10 +49,14 @@ self.onmessage = async ({ data }) => {
   }
   if (data.type !== "question" || !model) return;
   try {
-    const { embed, corpus } = model;
+    const { embed, corpus, outOfScope } = model;
     const query = await embed("query: " + data.question, { pooling: "mean", normalize: true });
-    const similarities = corpus.map(vector => vector.reduce((sum, value, index) => sum + value * query.data[index], 0));
-    self.postMessage({ type: "answer", articles: choose(data.question, similarities) });
+    const similarity = vector => vector?.reduce((sum, value, index) => sum + value * query.data[index], 0) ?? 0;
+    const similarities = corpus.map(similarity);
+    const unrelated = Math.max(...outOfScope.map(similarity));
+    self.postMessage({ type: "answer", response: choose(data.question, similarities, {
+      clarified: data.clarified, unrelated
+    }) });
   } catch {
     self.postMessage({ type: "answer-error" });
   }
